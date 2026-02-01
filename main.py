@@ -563,62 +563,72 @@ try:
             raise HTTPException(status_code=401, detail="Missing access token")
         return h.split(" ", 1)[1].strip()
 
-    def _handle_domain(fn):
-        def wrapper(*args, **kwargs):
-            try:
-                return fn(*args, **kwargs)
-            except AuthError as e:
-                raise HTTPException(status_code=e.status_code, detail=e.detail)
-        return wrapper
+    def _raise_domain(e: AuthError) -> None:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
 
     @app.post("/auth/request-otp", response_model=RequestOtpOut)
-    @_handle_domain
     def request_otp(payload: RequestOtpIn) -> RequestOtpOut:
-        auth.request_otp(payload.email)
-        return RequestOtpOut(ok=True)
+        try:
+            auth.request_otp(str(payload.email))
+            return RequestOtpOut(ok=True)
+        except AuthError as e:
+            _raise_domain(e)
 
     @app.post("/auth/verify-otp", response_model=VerifyOtpOut)
-    @_handle_domain
     def verify_otp(payload: VerifyOtpIn) -> VerifyOtpOut:
-        out = auth.verify_otp(
-            email=str(payload.email),
-            otp_code=payload.otp,
-            device_fingerprint=payload.device_fingerprint,
-            device_name=payload.device_name,
-            platform=payload.platform,
-        )
-        return VerifyOtpOut(**out)
+        try:
+            out = auth.verify_otp(
+                email=str(payload.email),
+                otp_code=payload.otp,
+                device_fingerprint=payload.device_fingerprint,
+                device_name=payload.device_name,
+                platform=payload.platform,
+            )
+            return VerifyOtpOut(**out)
+        except AuthError as e:
+            _raise_domain(e)
 
     @app.post("/auth/refresh", response_model=RefreshOut)
-    @_handle_domain
     def refresh_token(payload: RefreshIn) -> RefreshOut:
-        out = auth.refresh(payload.refresh_token, payload.device_fingerprint)
-        return RefreshOut(**out)
+        try:
+            out = auth.refresh(payload.refresh_token, payload.device_fingerprint)
+            return RefreshOut(**out)
+        except AuthError as e:
+            _raise_domain(e)
 
     @app.post("/auth/logout", response_model=LogoutOut)
-    @_handle_domain
     def logout(request: Request) -> LogoutOut:
-        token = _bearer(request)
-        out = auth.logout(token)
-        return LogoutOut(**out)
+        try:
+            token = _bearer(request)
+            out = auth.logout(token)
+            return LogoutOut(**out)
+        except AuthError as e:
+            _raise_domain(e)
 
     @app.get("/me")
-    @_handle_domain
     def me(request: Request) -> Dict[str, Any]:
-        token = _bearer(request)
-        return auth.me(token)
+        try:
+            token = _bearer(request)
+            return auth.me(token)
+        except AuthError as e:
+            _raise_domain(e)
 
     @app.get("/devices")
-    @_handle_domain
     def devices(request: Request) -> Dict[str, Any]:
-        token = _bearer(request)
-        return auth.devices(token)
+        try:
+            token = _bearer(request)
+            return auth.devices(token)
+        except AuthError as e:
+            _raise_domain(e)
 
     @app.delete("/devices/{device_id}")
-    @_handle_domain
     def delete_device(request: Request, device_id: int = Path(..., ge=1)) -> Dict[str, Any]:
-        token = _bearer(request)
-        return auth.delete_device(token, device_id)
+        try:
+            token = _bearer(request)
+            return auth.delete_device(token, device_id)
+        except AuthError as e:
+            _raise_domain(e)
+
 
 except Exception:
     # FastAPI adapter not available in this runtime. Domain layer remains usable.
